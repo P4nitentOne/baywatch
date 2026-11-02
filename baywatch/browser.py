@@ -52,6 +52,22 @@ class Browser:
         self.captcha_lock = asyncio.Lock()
 
     async def new_tab(self, n: int) -> Tab:
+        ctx = await self._launch(n)
+        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        page.set_default_timeout(30000)
+        return Tab(self, ctx, page, n)
+
+    async def relaunch(self, n: int, old: BrowserContext) -> BrowserContext:
+        """Start worker n's Chrome again after its window was closed or the browser died."""
+        if old in self.contexts:
+            self.contexts.remove(old)
+        try:
+            await old.close()
+        except PlaywrightError:
+            pass
+        return await self._launch(n)
+
+    async def _launch(self, n: int) -> BrowserContext:
         profile = self.cfg.profile_dir / f"worker{n}"
         profile.mkdir(parents=True, exist_ok=True)
         ctx = await self.pw.chromium.launch_persistent_context(
@@ -67,9 +83,7 @@ class Browser:
         if self.cfg.block_images:
             await ctx.route(HEAVY, lambda route: route.abort())
         self.contexts.append(ctx)
-        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
-        page.set_default_timeout(30000)
-        return Tab(self, ctx, page, n)
+        return ctx
 
     async def close(self) -> None:
         for ctx in self.contexts:
@@ -108,6 +122,8 @@ class Tab:
         appears (or after a few seconds if it never does).
         """
         await self._pace()
+        if self.page.is_closed():
+            await self._replace_page()
         for attempt in range(3):
             try:
                 await self.page.goto(url, wait_until="domcontentloaded", timeout=45000)
@@ -218,10 +234,19 @@ class Tab:
         await asyncio.sleep(random.uniform(p.min_delay, p.max_delay))
 
     async def _replace_page(self) -> None:
-        """A crashed tab rejects every later navigation, so swap it for a fresh one."""
-        log.info("replacing crashed tab")
+        """A crashed tab rejects every later navigation, so swap it for a fresh one.
+
+        If the whole window is gone (closed by hand, or Chrome went down with the tab),
+        start a new one; otherwise every claimed row would fail instantly.
+        """
         old = self.page
-        self.page = await self.ctx.new_page()
+        try:
+            self.page = await self.ctx.new_page()
+            log.info("[w%d] replacing crashed tab", self.n)
+        except PlaywrightError:
+            log.warning("[w%d] browser window is gone, starting a new one", self.n)
+            self.ctx = await self.browser.relaunch(self.n, self.ctx)
+            self.page = self.ctx.pages[0] if self.ctx.pages else await self.ctx.new_page()
         self.page.set_default_timeout(30000)
         try:
             await old.close()
