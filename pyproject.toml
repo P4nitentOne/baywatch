@@ -1,0 +1,32 @@
+[project]
+name = "baywatch"
+version = "0.1.0"
+description = "Slow-motion eBay seller lead finder. No API key, no message broker, just a browser."
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "playwright>=1.55",
+    "phonenumbers>=8.13",
+]
+
+[project.optional-dependencies]
+# Automatic hCaptcha solver (captcha_solver = "clip"). Large: pulls in torch.
+solver = ["torch>=2.4", "transformers>=4.44", "pillow>=10", "imagehash>=4.3", "numpy>=1.26"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+baywatch = "baywatch.cli:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["baywatch"]
+
+[tool.setuptools.package-data]
+baywatch = ["assets/*.jpg"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

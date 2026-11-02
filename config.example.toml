@@ -1,0 +1,81 @@
+# Copy to config.toml and edit.
+
+# eBay site to scrape. Must match the category URLs below.
+site = "https://www.ebay.it"
+# Country written to the "Location" column, and the default region used to normalise phone numbers.
+country = "Italia"
+phone_region = "IT"
+
+database = "baywatch.db"
+# Chrome profile directory. Keeps cookies between runs, so a captcha you solve once stays solved.
+profile_dir = ".profile"
+# "chrome" uses your installed Google Chrome. eBay blocks Playwright's bundled Chromium much faster.
+browser_channel = "chrome"
+
+# Tabs working in parallel. They share one Chrome profile, so a captcha solved in one tab counts for all.
+workers = 4
+# Don't download eBay product photos, fonts or video. Much faster; hCaptcha images still load.
+block_images = true
+
+# What to do when eBay shows a captcha:
+#   "clip"   - try the automatic hCaptcha solver first (needs: pip install -e .[solver]), then fall back to manual
+#   "manual" - pause and wait for you to solve it in the browser window
+captcha_solver = "clip"
+
+# Only keep sellers whose store About tab says they are located here ("Luogo: Italia").
+# Leave empty to keep every seller.
+seller_location = "Italia"
+
+[pacing]
+# Random pause before every page load, per tab, in seconds.
+min_delay = 1.0
+max_delay = 3.0
+# Max seconds to wait for the element a page is loaded for (item links, store link, business details).
+ready_timeout = 6.0
+# eBay's "Sorry, something went wrong on our end" page is an eBay bug, not a block: refresh it this many times.
+error_refreshes = 4
+# If a page still fails after that, the worker counts a block. After free_retries blocks in a row
+# it pauses base * 2^n seconds, capped at max.
+free_retries = 2
+backoff_base = 10.0
+backoff_max = 120.0
+# Optional pause every N page loads (0 = never).
+break_every = 0
+break_seconds = 30.0
+# How long to wait for you to solve a captcha in the browser window before giving up on that page.
+captcha_timeout = 600.0
+# Tries per page / item / seller before it is marked failed (requeue with: baywatch retry-failed).
+max_attempts = 4
+
+# Automatic category discovery. Starts at {site}/n/all-categories, follows subcategories
+# down to the leaves, and scrapes item listings at every leaf. No category URLs needed.
+[discovery]
+enabled = true
+# Limit to some top-level categories, by name (part of it is enough) or id. Empty = everything.
+#   roots = ["Abbigliamento", "Ricambi e accessori per auto e moto", "293"]
+roots = []
+max_depth = 4
+# Listing pages per leaf category (eBay stops paginating around 10).
+max_pages = 10
+# Added to every listing URL. LH_PrefLoc=1 = only items located in the site's country.
+listing_params = "LH_PrefLoc=1&mag=1"
+
+# Optional: fixed listing URLs, scraped in addition to (or, with discovery disabled, instead of)
+# the discovered ones. {page} is replaced by the page number.
+# [[categories]]
+# id = "moto-freni"
+# url = "https://www.ebay.it/b/Freni-e-ricambi-per-moto/49790/bn_16548780?LH_PrefLoc=1&mag=1&_pgn={page}"
+# max_pages = 10
+
+# Labels on the store's About tab ("Informazioni" > business seller details), mapped to output fields.
+# Matching is case-insensitive and by substring. Add your own labels here for other eBay sites.
+[labels]
+company = ["ragione sociale"]
+first_name = ["nome"]
+last_name = ["cognome"]
+address = ["indirizzo"]
+phone = ["numero di telefono"]
+fax = ["numero di fax"]
+email = ["email", "e-mail"]
+vat = ["partita iva"]
+further_info = ["altre informazioni"]
